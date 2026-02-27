@@ -630,6 +630,17 @@ void func_impl() {
 
     func->implementada = 1;  // marca que o corpo foi analisado
 
+    // Se a funcao nunca foi chamada (tsl_stack == NULL), cria uma TSL inicial
+    // com os parametros sem valores — necessario para analisar o corpo corretamente.
+    if (func->tsl_stack == NULL) {
+        type_ts *init_tsl = NULL;
+        for (int i = 0; i < func->num_params; i++) {
+            cadastra_variavel_local(&init_tsl, func->params[i].tipo,
+                                    func->params[i].lexema, "");
+        }
+        tsl_push(func, init_tsl);
+    }
+
     // Define o contexto de funcao atual (ativa o uso da TSL nos lookups)
     current_func = func;
 
