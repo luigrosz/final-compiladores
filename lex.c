@@ -30,6 +30,7 @@ static keyword_entry keywords[] = {
     {"while",  KW_WHILE},
     {"read",   KW_READ},
     {"write",  KW_WRITE},
+    {"return", KW_RETURN},
     {NULL,     0}
 };
 

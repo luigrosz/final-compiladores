@@ -5,10 +5,12 @@ int soma(int a, int b);
 begin
   read(x);
   read(y);
-  soma(x, y);
+  x = soma(x, y);
   write(x);
 end
 
 int soma(int a, int b) {
-  x = a + b;
+  int r;
+  r = a + b;
+  return r;
 }

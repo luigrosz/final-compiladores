@@ -93,3 +93,52 @@ void genOp(const char *dest, const char *src1, char op, const char *src2) {
 void genCopy(const char *dest, const char *src) {
     printf("  %s = %s\n", dest, src);
 }
+
+// ===================== CONVENCAO DE CHAMADA MIPS =====================
+
+static int is_num_str(const char *s) {
+    if (!s || !s[0]) return 0;
+    int start = (s[0] == '-') ? 1 : 0;
+    if (!s[start]) return 0;
+    for (int i = start; s[i]; i++)
+        if (!isdigit((unsigned char)s[i]) && s[i] != '.') return 0;
+    return 1;
+}
+
+void genFuncPreamble(int frame_size) {
+    printf("    # Preambulo\n");
+    printf("    addi $sp, $sp, -%d\n", frame_size);
+    printf("    sw   $ra, 0($sp)\n");
+    printf("    sw   $fp, 4($sp)\n");
+    printf("    move $fp, $sp\n");
+}
+
+void genSaveArg(int i, int offset) {
+    printf("    sw   $a%d, %d($sp)    # param %d\n", i, offset, i);
+}
+
+void genMoveReturn(const char *temp) {
+    printf("    move $v0, %s    # valor de retorno\n", temp);
+}
+
+void genFuncEpilogue(int frame_size) {
+    printf("    # Epilogo\n");
+    printf("    move $sp, $fp\n");
+    printf("    lw   $fp, 4($sp)\n");
+    printf("    lw   $ra, 0($sp)\n");
+    printf("    addi $sp, $sp, %d\n", frame_size);
+    printf("    jr   $ra\n");
+}
+
+void genCallArg(int i, const char *val) {
+    if (is_num_str(val))
+        printf("    li   $a%d, %s\n", i, val);
+    else if (val[0] == 't' && isdigit((unsigned char)val[1]))
+        printf("    move $a%d, %s\n", i, val);   // temp intermediario
+    else
+        printf("    lw   $a%d, %s\n", i, val);   // variavel em memoria
+}
+
+void genCallGetReturn(const char *dest_temp) {
+    printf("    move %s, $v0    # pega valor retornado\n", dest_temp);
+}

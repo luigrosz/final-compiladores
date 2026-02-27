@@ -48,6 +48,7 @@
 #define KW_READ 209
 #define KW_WRITE 210
 #define ID 211
+#define KW_RETURN 212
 
 // Operadores relacionais
 #define LT 220

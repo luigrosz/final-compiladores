@@ -12,6 +12,7 @@
 // Definicao das variaveis globais
 type_token *lookahead;
 type_tsf *current_func = NULL;  // funcao cujo corpo esta sendo analisado no momento
+int func_has_return = 0;        // flag: corpo atual contem ao menos um 'return'
 
 // Busca um identificador: primeiro na TSL da funcao atual, depois na TSG.
 // Encerra com erro semantico se nao encontrado.
@@ -24,6 +25,35 @@ static type_ts *busca_id(const char *lexema) {
     if (found != NULL) return found;
     printf("[ERRO SEMANTICO] Identificador '%s' nao declarado!\n", lexema);
     exit(1);
+}
+
+// Forward declarations
+void func_call_expr(char *id, char *result_temp);
+void cmd_return();
+
+// Retorna 1 se 's' e um literal numerico (inteiro ou float)
+static int is_num_literal(const char *s) {
+    if (!s || !s[0]) return 0;
+    int i = (s[0] == '-') ? 1 : 0;
+    if (!s[i]) return 0;
+    for (; s[i]; i++)
+        if (!isdigit((unsigned char)s[i]) && s[i] != '.') return 0;
+    return 1;
+}
+
+// Determina tipo de um argumento (literal ou variavel/temp).
+// Para literais: "int" ou "float". Para variaveis: busca nas tabelas.
+// Para temps intermediarios (tN): assume tipo do parametro esperado.
+static void tipo_arg(const char *arg, const char *param_tipo, char *out_tipo) {
+    if (is_num_literal(arg)) {
+        strcpy(out_tipo, (strchr(arg, '.') != NULL) ? "float" : "int");
+    } else if (arg[0] == 't' && isdigit((unsigned char)arg[1])) {
+        // Temp intermediario gerado por expressao composta: assume compativel
+        strcpy(out_tipo, param_tipo);
+    } else {
+        type_ts *var = busca_id(arg);
+        strcpy(out_tipo, var->tipo);
+    }
 }
 
 // ===================== MATCH =====================
@@ -54,9 +84,17 @@ void F(char *temp) {
         strcpy(temp, lookahead->lexema);
         match(NUM);
     } else if (lookahead->tag == ID) {
-        strcpy(temp, lookahead->lexema);
-        busca_id(lookahead->lexema);   // valida: TSL -> TSG -> erro
+        char id[MAX_CHAR];
+        strcpy(id, lookahead->lexema);
         match(ID);
+        if (lookahead->tag == OPEN_PAR) {
+            // Chamada de funcao em contexto de expressao (retorna valor)
+            func_call_expr(id, temp);
+        } else {
+            // Variavel comum: valida e usa como operando
+            busca_id(id);
+            strcpy(temp, id);
+        }
     } else {
         printf("[ERRO SINTATICO] Esperado '(', NUM ou ID, encontrado '%s'\n", lookahead->lexema);
     }
@@ -190,14 +228,13 @@ void func_call_cmd(char *id) {
     // Verifica tipos e cria nova TSL com parametros inicializados
     type_ts *nova_tsl = NULL;
     for (int i = 0; i < arg_count; i++) {
-        // busca_id: TSL do contexto atual -> TSG -> erro
-        type_ts *var = busca_id(args[i]);
-        if (strcmp(var->tipo, func->params[i].tipo) != 0) {
-            printf("[ERRO SEMANTICO] Argumento '%s' eh do tipo '%s', esperado '%s' (param '%s')\n",
-                   args[i], var->tipo, func->params[i].tipo, func->params[i].lexema);
+        char arg_tipo[MAX_CHAR];
+        tipo_arg(args[i], func->params[i].tipo, arg_tipo);
+        if (strcmp(arg_tipo, func->params[i].tipo) != 0) {
+            printf("[ERRO SEMANTICO] Argumento '%s' do tipo '%s', esperado '%s' (param '%s')\n",
+                   args[i], arg_tipo, func->params[i].tipo, func->params[i].lexema);
             exit(1);
         }
-        // Registra parametro na nova TSL inicializado com o argumento passado
         cadastra_variavel_local(&nova_tsl, func->params[i].tipo,
                                 func->params[i].lexema, args[i]);
     }
@@ -205,11 +242,108 @@ void func_call_cmd(char *id) {
     // Empilha a nova TSL na funcao chamada (suporta recursao)
     tsl_push(func, nova_tsl);
 
-    // Gera instrucoes de passagem de parametros e chamada
+    // Gera instrucoes de passagem de parametros (convencao MIPS) e chamada
     for (int i = 0; i < arg_count; i++) {
-        printf("  param %s\n", temps[i]);
+        genCallArg(i, temps[i]);
     }
     genJal(func->label);
+    // Valor de retorno descartado (chamada como statement)
+}
+
+// func_call_expr: chamada de funcao em posicao de expressao (retorna valor).
+// Chamado a partir de F() quando ID e seguido de '('.
+void func_call_expr(char *id, char *result_temp) {
+    type_tsf *func = busca_funcao(id);
+    if (func == NULL) {
+        printf("[ERRO SEMANTICO] Funcao '%s' nao declarada!\n", id);
+        exit(1);
+    }
+
+    match(OPEN_PAR);
+
+    int arg_count = 0;
+    char args[MAX_PARAMS][MAX_CHAR];
+    char temps[MAX_PARAMS][32];
+
+    if (lookahead->tag != CLOSE_PAR) {
+        strcpy(args[arg_count], lookahead->lexema);
+        E(temps[arg_count]);
+        arg_count++;
+        while (lookahead->tag == COMMA) {
+            match(COMMA);
+            strcpy(args[arg_count], lookahead->lexema);
+            E(temps[arg_count]);
+            arg_count++;
+        }
+    }
+
+    match(CLOSE_PAR);
+    // Sem SEMICOLON: contexto de expressao
+
+    if (arg_count != func->num_params) {
+        printf("[ERRO SEMANTICO] Funcao '%s' espera %d parametros, recebeu %d\n",
+               id, func->num_params, arg_count);
+        exit(1);
+    }
+
+    // Verifica tipos e cria nova TSL
+    type_ts *nova_tsl = NULL;
+    for (int i = 0; i < arg_count; i++) {
+        char arg_tipo[MAX_CHAR];
+        tipo_arg(args[i], func->params[i].tipo, arg_tipo);
+        if (strcmp(arg_tipo, func->params[i].tipo) != 0) {
+            printf("[ERRO SEMANTICO] Argumento '%s' do tipo '%s', esperado '%s'\n",
+                   args[i], arg_tipo, func->params[i].tipo);
+            exit(1);
+        }
+        cadastra_variavel_local(&nova_tsl, func->params[i].tipo,
+                                func->params[i].lexema, args[i]);
+    }
+    tsl_push(func, nova_tsl);
+
+    // Gera convencao de chamada e recupera valor de retorno
+    for (int i = 0; i < arg_count; i++) {
+        genCallArg(i, temps[i]);
+    }
+    genJal(func->label);
+    newTemp(result_temp);
+    genCallGetReturn(result_temp);
+}
+
+// cmd_return -> return E ;
+// O valor de retorno deve ser compativel com o tipo declarado da funcao.
+// Emite o epilogo completo (move $v0 + epilogo padrao + jr $ra).
+void cmd_return() {
+    match(KW_RETURN);
+
+    char temp[32];
+    E(temp);
+
+    match(SEMICOLON);
+
+    if (current_func == NULL) {
+        printf("[ERRO SEMANTICO] 'return' fora de uma funcao!\n");
+        exit(1);
+    }
+
+    // Verifica compatibilidade de tipo (quando identificador simples ou temp conhecido)
+    type_ts *var_ret = NULL;
+    if (current_func->tsl_stack != NULL)
+        var_ret = busca_variavel_local(current_func->tsl_stack->tsl, temp);
+    if (var_ret == NULL)
+        var_ret = busca_variavel(temp);
+    if (var_ret != NULL && strcmp(var_ret->tipo, current_func->tipo) != 0) {
+        printf("[ERRO SEMANTICO] Tipo de retorno '%s' incompativel com tipo '%s' da funcao '%s'\n",
+               var_ret->tipo, current_func->tipo, current_func->lexema);
+        exit(1);
+    }
+
+    // Gera: move $v0, result + epilogo padrao
+    int frame_size = 8 + current_func->num_params * 4;
+    genMoveReturn(temp);
+    genFuncEpilogue(frame_size);
+
+    func_has_return = 1;
 }
 
 // cmd_if -> if ( condicao ) { comandos } [else { comandos }]
@@ -325,6 +459,8 @@ void comando() {
         cmd_read();
     } else if (lookahead->tag == KW_WRITE) {
         cmd_write();
+    } else if (lookahead->tag == KW_RETURN) {
+        cmd_return();
     } else {
         printf("[ERRO SINTATICO] Comando inesperado: '%s'\n", lookahead->lexema);
     }
@@ -334,7 +470,7 @@ void comando() {
 void comandos() {
     while (lookahead->tag == ID || lookahead->tag == KW_IF ||
            lookahead->tag == KW_WHILE || lookahead->tag == KW_READ ||
-           lookahead->tag == KW_WRITE) {
+           lookahead->tag == KW_WRITE || lookahead->tag == KW_RETURN) {
         comando();
     }
 }
@@ -496,19 +632,34 @@ void func_impl() {
 
     match(CLOSE_PAR);
 
-    // Emite .data para cada parametro (tratados como variaveis locais)
+    // Calcula tamanho do frame: 8 bytes (ra+fp) + 4 por parametro
+    int frame_size = 8 + func->num_params * 4;
+
+    // Emite label + preambulo MIPS
+    genFuncLabel(func->label);
+    genFuncPreamble(frame_size);
+
+    // Salva argumentos dos registradores $a0, $a1... na pilha
     for (int i = 0; i < func->num_params; i++) {
-        genDecl(func->params[i].tipo, func->params[i].lexema);
+        genSaveArg(i, 8 + i * 4);
     }
 
-    genFuncLabel(func->label);
+    // Emite .data para variaveis locais declaradas no corpo (nao para params)
+    // (feito dentro de declaracoes_locais via genDecl)
+
+    func_has_return = 0;  // reinicia flag para esta funcao
 
     match(OPEN_BRACE);
     declaracoes_locais();  // variaveis locais (podem ter shadowing sobre TSG)
     comandos();
     match(CLOSE_BRACE);
 
-    genJr();
+    // Gramatica exige ao menos um 'return' no corpo da funcao
+    if (!func_has_return) {
+        printf("[ERRO SEMANTICO] Funcao '%s' deve conter ao menos um comando 'return'!\n",
+               func->lexema);
+        exit(1);
+    }
 
     current_func = NULL;
 }

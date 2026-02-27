@@ -38,4 +38,12 @@ void genWhileEnd(const char *label_start, const char *label_end);
 void genOp(const char *dest, const char *src1, char op, const char *src2);
 void genCopy(const char *dest, const char *src);
 
+// Convencao de chamada MIPS
+void genFuncPreamble(int frame_size);
+void genSaveArg(int i, int offset);
+void genMoveReturn(const char *temp);
+void genFuncEpilogue(int frame_size);
+void genCallArg(int i, const char *val);
+void genCallGetReturn(const char *dest_temp);
+
 #endif //_GEN_H_
