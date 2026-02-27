@@ -1,16 +1,55 @@
 int x;
 int y;
+int resultado;
+
 int soma(int a, int b);
+int multiplica(int a, int b);
+int maximo(int a, int b);
+int fat(int n);
 
 begin
   read(x);
   read(y);
-  x = soma(x, y);
-  write(x);
+
+  resultado = soma(x, y);
+  write(resultado);
+
+  resultado = multiplica(3, 4);
+  write(resultado);
+
+  resultado = maximo(x, y);
+  write(resultado);
+
+  resultado = fat(5);
+  write(resultado);
 end
 
 int soma(int a, int b) {
+  int resultado;
+  resultado = a + b;
+  return resultado;
+}
+
+int multiplica(int a, int b) {
   int r;
-  r = a + b;
+  r = a * b;
   return r;
+}
+
+int maximo(int a, int b) {
+  int m;
+  m = b;
+  if (a > b) {
+    m = a;
+  }
+  return m;
+}
+
+int fat(int n) {
+  int res;
+  if (n > 1) {
+    res = fat(n);
+  }
+  res = n;
+  return res;
 }

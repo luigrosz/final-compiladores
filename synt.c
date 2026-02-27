@@ -12,13 +12,14 @@
 // Definicao das variaveis globais
 type_token *lookahead;
 type_tsf *current_func = NULL;  // funcao cujo corpo esta sendo analisado no momento
+type_ts  *current_tsl  = NULL;  // frame TSL ativo do corpo atual (estavel: nao muda com chamadas recursivas)
 int func_has_return = 0;        // flag: corpo atual contem ao menos um 'return'
 
 // Busca um identificador: primeiro na TSL da funcao atual, depois na TSG.
 // Encerra com erro semantico se nao encontrado.
 static type_ts *busca_id(const char *lexema) {
-    if (current_func != NULL && current_func->tsl_stack != NULL) {
-        type_ts *found = busca_variavel_local(current_func->tsl_stack->tsl, (char *)lexema);
+    if (current_tsl != NULL) {
+        type_ts *found = busca_variavel_local(current_tsl, (char *)lexema);
         if (found != NULL) return found;
     }
     type_ts *found = busca_variavel((char *)lexema);
@@ -338,8 +339,8 @@ void cmd_return() {
 
     // Verifica compatibilidade de tipo (quando identificador simples ou temp conhecido)
     type_ts *var_ret = NULL;
-    if (current_func->tsl_stack != NULL)
-        var_ret = busca_variavel_local(current_func->tsl_stack->tsl, temp);
+    if (current_tsl != NULL)
+        var_ret = busca_variavel_local(current_tsl, temp);
     if (var_ret == NULL)
         var_ret = busca_variavel(temp);
     if (var_ret != NULL && strcmp(var_ret->tipo, current_func->tipo) != 0) {
@@ -674,6 +675,10 @@ void func_impl() {
 
     match(OPEN_BRACE);
     declaracoes_locais();  // variaveis locais (podem ter shadowing sobre TSG)
+    // Captura o frame TSL estavel APOS declaracoes_locais: inclui params + vars locais.
+    // Chamadas recursivas dentro de comandos() farao tsl_push na funcao chamada,
+    // mas current_tsl continua apontando para este frame — lookup permanece correto.
+    current_tsl = (current_func->tsl_stack != NULL) ? current_func->tsl_stack->tsl : NULL;
     comandos();
     match(CLOSE_BRACE);
 
@@ -684,6 +689,7 @@ void func_impl() {
         exit(1);
     }
 
+    current_tsl  = NULL;
     current_func = NULL;
 }
 
