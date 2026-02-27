@@ -404,6 +404,10 @@ void declaracao() {
     if (lookahead->tag == SEMICOLON) {
         // DeclaracaoV -> ;
         match(SEMICOLON);
+        if (busca_variavel(aux_lexema) != NULL) {
+            printf("[ERRO SEMANTICO] Variavel '%s' ja declarada na TSG!\n", aux_lexema);
+            exit(1);
+        }
         cadastra_variavel(aux_tipo, aux_lexema);
         genDecl(aux_tipo, aux_lexema);
     } else if (lookahead->tag == OPEN_PAR) {
@@ -422,6 +426,42 @@ void declaracoes() {
 }
 
 // ===================== FUNC_CODE =====================
+
+// declaracoes_locais -> tipo id ; declaracoes_locais | epsilon
+// Declaracoes de variaveis locais dentro do corpo de uma funcao.
+// O mesmo nome ja presente na TSG e permitido (shadowing): a variavel local
+// sobrescreve a global dentro deste escopo. Duplicata na propria TSL e erro.
+void declaracoes_locais() {
+    while (is_tipo(lookahead->tag)) {
+        char tipo[MAX_CHAR];
+        char nome[MAX_CHAR];
+
+        strcpy(tipo, lookahead->lexema);
+        match(lookahead->tag);
+
+        strcpy(nome, lookahead->lexema);
+        match(ID);
+
+        match(SEMICOLON);
+
+        // Se a funcao nao tem TSL (nunca foi chamada), cria frame vazio
+        if (current_func->tsl_stack == NULL) {
+            tsl_push(current_func, NULL);
+        }
+
+        // Duplicata na mesma TSL e erro (inclui params e vars locais ja declaradas)
+        if (busca_variavel_local(current_func->tsl_stack->tsl, nome) != NULL) {
+            printf("[ERRO SEMANTICO] Identificador '%s' ja declarado neste escopo local!\n", nome);
+            exit(1);
+        }
+
+        // Mesmo nome na TSG e permitido (shadowing): o global fica inacessivel
+        // dentro desta funcao para este identificador.
+
+        cadastra_variavel_local(&current_func->tsl_stack->tsl, tipo, nome, "");
+        genDecl(tipo, nome);
+    }
+}
 
 // func_impl -> tipo id ( [Params] ) { comandos }
 void func_impl() {
@@ -464,6 +504,7 @@ void func_impl() {
     genFuncLabel(func->label);
 
     match(OPEN_BRACE);
+    declaracoes_locais();  // variaveis locais (podem ter shadowing sobre TSG)
     comandos();
     match(CLOSE_BRACE);
 
