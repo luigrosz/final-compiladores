@@ -360,14 +360,8 @@ void declaracaoF(char *tipo, char *lexema) {
     if (busca_funcao(lexema) != NULL) {
         printf("[ERRO SEMANTICO] Funcao '%s' ja declarada na TSF!\n", lexema);
     } else {
+        // Prototipo: cadastra funcao com TSL nula
         cadastra_funcao(tipo, lexema, params, num_params);
-    }
-
-    for (int i = 0; i < num_params; i++) {
-        if (busca_variavel(params[i].lexema) == NULL) {
-            cadastra_variavel(params[i].tipo, params[i].lexema);
-            genDecl(params[i].tipo, params[i].lexema);
-        }
     }
 }
 
@@ -425,23 +419,21 @@ void func_impl() {
 
     match(OPEN_PAR);
 
-    // Consome parametros (ja foram registrados no prototipo)
+    // Parseia parametros e popula a TSL da funcao
+    type_param params[MAX_PARAMS];
+    int num_params = 0;
     if (lookahead->tag != CLOSE_PAR) {
-        type_param params[MAX_PARAMS];
-        int num_params;
         parse_params(params, &num_params);
+    }
+
+    for (int i = 0; i < num_params; i++) {
+        cadastra_variavel_local(&func->tsl, params[i].tipo, params[i].lexema);
+        genDecl(params[i].tipo, params[i].lexema);
     }
 
     match(CLOSE_PAR);
 
-    // Gerar label da funcao
-    if (func != NULL) {
-        genFuncLabel(func->label);
-    } else {
-        char label_tmp[MAX_CHAR + 8];
-        snprintf(label_tmp, sizeof(label_tmp), "func_%s", nome);
-        genFuncLabel(label_tmp);
-    }
+    genFuncLabel(func->label);
 
     match(OPEN_BRACE);
     comandos();

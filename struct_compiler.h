@@ -81,6 +81,14 @@ struct st_param {
 };
 typedef struct st_param type_param;
 
+// Tabela de Simbolos de Variaveis (TSG e TSL compartilham este tipo)
+struct st_ts {
+    char tipo[MAX_CHAR];
+    char lexema[MAX_CHAR];
+    struct st_ts *prox;
+};
+typedef struct st_ts type_ts;
+
 // Tabela de Simbolos de Funcoes
 struct st_tsf {
     char tipo[MAX_CHAR];
@@ -88,16 +96,9 @@ struct st_tsf {
     char label[MAX_CHAR];
     type_param params[MAX_PARAMS];
     int num_params;
+    type_ts *tsl;       // Tabela de Simbolos Local da funcao (NULL se so prototipada)
     struct st_tsf *prox;
 };
 typedef struct st_tsf type_tsf;
-
-// Tabela de Simbolos de Variaveis
-struct st_ts {
-    char tipo[MAX_CHAR];
-    char lexema[MAX_CHAR];
-    struct st_ts *prox;
-};
-typedef struct st_ts type_ts;
 
 #endif //_STRUCT_COMPILER_

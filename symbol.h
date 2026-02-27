@@ -17,16 +17,20 @@
 
 // Variaveis globais
 extern type_tsf *tsf;
-extern type_ts *ts;
+extern type_ts *tsg;   // Tabela de Simbolos Global
 
 // Tabela de Simbolos de Funcoes (TSF)
 void cadastra_funcao(char *tipo, char *lexema, type_param *params, int num_params);
 type_tsf *busca_funcao(char *lexema);
 void imprime_tsf();
 
-// Tabela de Simbolos de Variaveis (TS)
+// Tabela de Simbolos Global (TSG)
 void cadastra_variavel(char *tipo, char *lexema);
 type_ts *busca_variavel(char *lexema);
-void imprime_ts();
+void imprime_tsg();
+
+// Tabela de Simbolos Local (TSL) — por funcao
+void cadastra_variavel_local(type_ts **tsl, char *tipo, char *lexema);
+type_ts *busca_variavel_local(type_ts *tsl, char *lexema);
 
 #endif //_SYMBOL_H_

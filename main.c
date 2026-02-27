@@ -7,7 +7,7 @@ int main(int argc, char *argv[]) {
     }
 
     tsf = NULL;
-    ts = NULL;
+    tsg = NULL;
 
     initLex(argv[1]);
     lookahead = getToken();
@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
     program();
 
     imprime_tsf();
-    imprime_ts();
+    imprime_tsg();
 
     if (lookahead->tag == ENDTOKEN) {
         printf("\nCompilacao concluida com sucesso!\n");
