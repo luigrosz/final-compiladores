@@ -180,10 +180,20 @@ void condicao(char *temp1, char *op, char *temp2) {
 
 // atribuicao -> = E ;
 void atribuicao(char *id) {
-    busca_id(id);   // valida o alvo da atribuicao: TSL -> TSG -> erro
+    type_ts *alvo = busca_id(id);  // valida e recupera tipo do alvo
     match(ASSIGN);
     char temp[32];
     E(temp);
+
+    // Verifica compatibilidade de tipo entre alvo e expressao RHS
+    char rhs_tipo[MAX_CHAR];
+    tipo_arg(temp, alvo->tipo, rhs_tipo);  // para temps gerados, assume tipo do alvo
+    if (strcmp(rhs_tipo, alvo->tipo) != 0) {
+        printf("[ERRO SEMANTICO] Atribuicao incompativel: '%s' e do tipo '%s', mas recebe '%s'\n",
+               id, alvo->tipo, rhs_tipo);
+        exit(1);
+    }
+
     genAssign(id, temp);
     match(SEMICOLON);
 }
@@ -618,6 +628,8 @@ void func_impl() {
         exit(1);
     }
 
+    func->implementada = 1;  // marca que o corpo foi analisado
+
     // Define o contexto de funcao atual (ativa o uso da TSL nos lookups)
     current_func = func;
 
@@ -692,4 +704,17 @@ void program() {
     genHalt();
 
     func_code();
+
+    // Verifica se todas as funcoes declaradas foram implementadas
+    {
+        type_tsf *f = tsf;
+        while (f != NULL) {
+            if (!f->implementada) {
+                printf("[ERRO SEMANTICO] Funcao '%s' declarada mas nunca implementada!\n",
+                       f->lexema);
+                exit(1);
+            }
+            f = f->prox;
+        }
+    }
 }

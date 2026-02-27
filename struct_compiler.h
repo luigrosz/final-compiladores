@@ -106,6 +106,7 @@ struct st_tsf {
     type_param params[MAX_PARAMS];
     int num_params;
     type_tsl_stack *tsl_stack;  // pilha de TSLs (NULL se apenas prototipada)
+    int implementada;           // 1 se o corpo da funcao foi analisado, 0 se so prototipo
     struct st_tsf *prox;
 };
 typedef struct st_tsf type_tsf;

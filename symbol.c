@@ -25,6 +25,7 @@ void cadastra_funcao(char *tipo, char *lexema, type_param *params, int num_param
         strcpy(novo->params[i].lexema, params[i].lexema);
     }
     novo->tsl_stack = NULL;  // pilha nula enquanto so houver prototipo
+    novo->implementada = 0;
     novo->prox = tsf;
     tsf = novo;
 }
