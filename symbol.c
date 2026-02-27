@@ -24,7 +24,7 @@ void cadastra_funcao(char *tipo, char *lexema, type_param *params, int num_param
         strcpy(novo->params[i].tipo, params[i].tipo);
         strcpy(novo->params[i].lexema, params[i].lexema);
     }
-    novo->tsl = NULL;   // TSL nula enquanto so houver prototipo
+    novo->tsl_stack = NULL;  // pilha nula enquanto so houver prototipo
     novo->prox = tsf;
     tsf = novo;
 }
@@ -48,14 +48,23 @@ void imprime_tsf() {
         for (int i = 0; i < aux->num_params; i++) {
             printf("  Param %d: %s %s\n", i, aux->params[i].tipo, aux->params[i].lexema);
         }
-        if (aux->tsl == NULL) {
+        if (aux->tsl_stack == NULL) {
             printf("  TSL: (nula - apenas prototipo)\n");
         } else {
-            printf("  TSL:\n");
-            type_ts *var = aux->tsl;
-            while (var != NULL) {
-                printf("    Tipo: %s | Lexema: %s\n", var->tipo, var->lexema);
-                var = var->prox;
+            int frame_num = 0;
+            type_tsl_stack *frame = aux->tsl_stack;
+            while (frame != NULL) {
+                printf("  TSL [frame %d]:\n", frame_num++);
+                type_ts *var = frame->tsl;
+                while (var != NULL) {
+                    if (var->valor[0] != '\0')
+                        printf("    Tipo: %s | Lexema: %s | Valor: %s\n",
+                               var->tipo, var->lexema, var->valor);
+                    else
+                        printf("    Tipo: %s | Lexema: %s\n", var->tipo, var->lexema);
+                    var = var->prox;
+                }
+                frame = frame->prev;
             }
         }
         aux = aux->prox;
@@ -69,6 +78,7 @@ void cadastra_variavel(char *tipo, char *lexema) {
     type_ts *novo = (type_ts *)malloc(sizeof(type_ts));
     strcpy(novo->tipo, tipo);
     strcpy(novo->lexema, lexema);
+    strcpy(novo->valor, "");
     novo->prox = tsg;
     tsg = novo;
 }
@@ -95,10 +105,11 @@ void imprime_tsg() {
 
 // ===================== TABELA DE SIMBOLOS LOCAL (TSL) =====================
 
-void cadastra_variavel_local(type_ts **tsl, char *tipo, char *lexema) {
+void cadastra_variavel_local(type_ts **tsl, char *tipo, char *lexema, char *valor) {
     type_ts *novo = (type_ts *)malloc(sizeof(type_ts));
     strcpy(novo->tipo, tipo);
     strcpy(novo->lexema, lexema);
+    strcpy(novo->valor, valor ? valor : "");
     novo->prox = *tsl;
     *tsl = novo;
 }
@@ -111,4 +122,18 @@ type_ts *busca_variavel_local(type_ts *tsl, char *lexema) {
         aux = aux->prox;
     }
     return NULL;
+}
+
+void tsl_push(type_tsf *func, type_ts *tsl) {
+    type_tsl_stack *frame = (type_tsl_stack *)malloc(sizeof(type_tsl_stack));
+    frame->tsl = tsl;
+    frame->prev = func->tsl_stack;
+    func->tsl_stack = frame;
+}
+
+void tsl_pop(type_tsf *func) {
+    if (func->tsl_stack == NULL) return;
+    type_tsl_stack *old = func->tsl_stack;
+    func->tsl_stack = old->prev;
+    free(old);
 }

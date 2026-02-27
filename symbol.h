@@ -30,7 +30,11 @@ type_ts *busca_variavel(char *lexema);
 void imprime_tsg();
 
 // Tabela de Simbolos Local (TSL) — por funcao
-void cadastra_variavel_local(type_ts **tsl, char *tipo, char *lexema);
+void cadastra_variavel_local(type_ts **tsl, char *tipo, char *lexema, char *valor);
 type_ts *busca_variavel_local(type_ts *tsl, char *lexema);
+
+// Pilha de TSLs (suporte a recursao)
+void tsl_push(type_tsf *func, type_ts *tsl);
+void tsl_pop(type_tsf *func);
 
 #endif //_SYMBOL_H_

@@ -11,6 +11,20 @@
 
 // Definicao das variaveis globais
 type_token *lookahead;
+type_tsf *current_func = NULL;  // funcao cujo corpo esta sendo analisado no momento
+
+// Busca um identificador: primeiro na TSL da funcao atual, depois na TSG.
+// Encerra com erro semantico se nao encontrado.
+static type_ts *busca_id(const char *lexema) {
+    if (current_func != NULL && current_func->tsl_stack != NULL) {
+        type_ts *found = busca_variavel_local(current_func->tsl_stack->tsl, (char *)lexema);
+        if (found != NULL) return found;
+    }
+    type_ts *found = busca_variavel((char *)lexema);
+    if (found != NULL) return found;
+    printf("[ERRO SEMANTICO] Identificador '%s' nao declarado!\n", lexema);
+    exit(1);
+}
 
 // ===================== MATCH =====================
 
@@ -41,6 +55,7 @@ void F(char *temp) {
         match(NUM);
     } else if (lookahead->tag == ID) {
         strcpy(temp, lookahead->lexema);
+        busca_id(lookahead->lexema);   // valida: TSL -> TSG -> erro
         match(ID);
     } else {
         printf("[ERRO SINTATICO] Esperado '(', NUM ou ID, encontrado '%s'\n", lookahead->lexema);
@@ -127,6 +142,7 @@ void condicao(char *temp1, char *op, char *temp2) {
 
 // atribuicao -> = E ;
 void atribuicao(char *id) {
+    busca_id(id);   // valida o alvo da atribuicao: TSL -> TSG -> erro
     match(ASSIGN);
     char temp[32];
     E(temp);
@@ -145,20 +161,18 @@ void func_call_cmd(char *id) {
     match(OPEN_PAR);
 
     int arg_count = 0;
-    char args[MAX_PARAMS][MAX_CHAR];
+    char args[MAX_PARAMS][MAX_CHAR];   // lexema do argumento (para tipo e valor inicial)
+    char temps[MAX_PARAMS][32];        // resultado computado de cada argumento
 
     if (lookahead->tag != CLOSE_PAR) {
         strcpy(args[arg_count], lookahead->lexema);
-        char temp[32];
-        E(temp);
-        printf("  param %s\n", temp);
+        E(temps[arg_count]);
         arg_count++;
 
         while (lookahead->tag == COMMA) {
             match(COMMA);
             strcpy(args[arg_count], lookahead->lexema);
-            E(temp);
-            printf("  param %s\n", temp);
+            E(temps[arg_count]);
             arg_count++;
         }
     }
@@ -166,25 +180,35 @@ void func_call_cmd(char *id) {
     match(CLOSE_PAR);
     match(SEMICOLON);
 
+    // Verifica contagem de argumentos
     if (arg_count != func->num_params) {
         printf("[ERRO SEMANTICO] Funcao '%s' espera %d parametros, recebeu %d\n",
                id, func->num_params, arg_count);
         exit(1);
     }
 
+    // Verifica tipos e cria nova TSL com parametros inicializados
+    type_ts *nova_tsl = NULL;
     for (int i = 0; i < arg_count; i++) {
-        type_ts *var = busca_variavel(args[i]);
-        if (var == NULL) {
-            printf("[ERRO SEMANTICO] Argumento '%s' nao declarado na TS!\n", args[i]);
-            exit(1);
-        }
+        // busca_id: TSL do contexto atual -> TSG -> erro
+        type_ts *var = busca_id(args[i]);
         if (strcmp(var->tipo, func->params[i].tipo) != 0) {
             printf("[ERRO SEMANTICO] Argumento '%s' eh do tipo '%s', esperado '%s' (param '%s')\n",
                    args[i], var->tipo, func->params[i].tipo, func->params[i].lexema);
             exit(1);
         }
+        // Registra parametro na nova TSL inicializado com o argumento passado
+        cadastra_variavel_local(&nova_tsl, func->params[i].tipo,
+                                func->params[i].lexema, args[i]);
     }
 
+    // Empilha a nova TSL na funcao chamada (suporta recursao)
+    tsl_push(func, nova_tsl);
+
+    // Gera instrucoes de passagem de parametros e chamada
+    for (int i = 0; i < arg_count; i++) {
+        printf("  param %s\n", temps[i]);
+    }
     genJal(func->label);
 }
 
@@ -256,6 +280,7 @@ void cmd_read() {
 
     char id[MAX_CHAR];
     strcpy(id, lookahead->lexema);
+    busca_id(id);   // valida: TSL -> TSG -> erro
     match(ID);
 
     genRead(id);
@@ -417,21 +442,24 @@ void func_impl() {
         exit(1);
     }
 
+    // Define o contexto de funcao atual (ativa o uso da TSL nos lookups)
+    current_func = func;
+
     match(OPEN_PAR);
 
-    // Parseia parametros e popula a TSL da funcao
-    type_param params[MAX_PARAMS];
-    int num_params = 0;
+    // Consome os parametros da assinatura (ja registrados na TSL pela chamada)
     if (lookahead->tag != CLOSE_PAR) {
-        parse_params(params, &num_params);
-    }
-
-    for (int i = 0; i < num_params; i++) {
-        cadastra_variavel_local(&func->tsl, params[i].tipo, params[i].lexema);
-        genDecl(params[i].tipo, params[i].lexema);
+        type_param params_dummy[MAX_PARAMS];
+        int n_dummy = 0;
+        parse_params(params_dummy, &n_dummy);
     }
 
     match(CLOSE_PAR);
+
+    // Emite .data para cada parametro (tratados como variaveis locais)
+    for (int i = 0; i < func->num_params; i++) {
+        genDecl(func->params[i].tipo, func->params[i].lexema);
+    }
 
     genFuncLabel(func->label);
 
@@ -440,6 +468,8 @@ void func_impl() {
     match(CLOSE_BRACE);
 
     genJr();
+
+    current_func = NULL;
 }
 
 // func_code -> func_impl func_code | epsilon

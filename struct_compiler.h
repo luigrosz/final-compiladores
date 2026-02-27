@@ -85,9 +85,17 @@ typedef struct st_param type_param;
 struct st_ts {
     char tipo[MAX_CHAR];
     char lexema[MAX_CHAR];
+    char valor[MAX_CHAR];  // valor inicial (usado na TSL para registrar o argumento passado)
     struct st_ts *prox;
 };
 typedef struct st_ts type_ts;
+
+// Pilha de TSLs: uma entrada por chamada ativa da funcao (suporta recursao)
+struct st_tsl_stack {
+    type_ts *tsl;               // variaveis locais desta chamada
+    struct st_tsl_stack *prev;  // frame da chamada anterior
+};
+typedef struct st_tsl_stack type_tsl_stack;
 
 // Tabela de Simbolos de Funcoes
 struct st_tsf {
@@ -96,7 +104,7 @@ struct st_tsf {
     char label[MAX_CHAR];
     type_param params[MAX_PARAMS];
     int num_params;
-    type_ts *tsl;       // Tabela de Simbolos Local da funcao (NULL se so prototipada)
+    type_tsl_stack *tsl_stack;  // pilha de TSLs (NULL se apenas prototipada)
     struct st_tsf *prox;
 };
 typedef struct st_tsf type_tsf;
