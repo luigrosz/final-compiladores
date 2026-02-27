@@ -1,0 +1,14 @@
+int x;
+int y;
+int soma(int a, int b);
+
+begin
+  read(x);
+  read(y);
+  soma(x, y);
+  write(x);
+end
+
+int soma(int a, int b) {
+  x = a + b;
+}
